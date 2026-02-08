@@ -36,23 +36,23 @@ defmodule Interpolation.Options do
     [:linear, :newton]
     |> Enum.filter(&Keyword.get(opts, &1, false))
     |> case do
-        [] -> [:linear]
-        list -> list
+      [] -> [:linear]
+      list -> list
     end
   end
 
-defp validate!(step, window) do
-  cond do
-    step <= 0.0 ->
-      raise ArgumentError,
-            "step must be positive, actual: #{inspect(step)}"
+  defp validate!(step, window) do
+    cond do
+      step <= 0.0 ->
+        raise ArgumentError,
+              "step must be positive, actual: #{inspect(step)}"
 
-    not is_integer(window) or window < 2 ->
-      raise ArgumentError,
-            "window size must be integer not less or equal 2, actual: #{inspect(window)}"
+      not is_integer(window) or window < 2 ->
+        raise ArgumentError,
+              "window size must be integer not less or equal 2, actual: #{inspect(window)}"
 
-    true ->
-      :ok
+      true ->
+        :ok
+    end
   end
-end
 end

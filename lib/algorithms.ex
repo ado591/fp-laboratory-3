@@ -63,5 +63,4 @@ defmodule Interpolation.Algorithms do
       acc + coeff * prod
     end)
   end
-
 end
