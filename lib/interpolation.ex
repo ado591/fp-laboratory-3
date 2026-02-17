@@ -47,12 +47,23 @@ defmodule Interpolation.Calculate do
       end
 
     window_algs = Enum.filter(state.algorithms, &(&1 != :linear))
-    min_points_for_window = if not Enum.empty?(window_algs), do: state.window, else: 0
 
-    if not Enum.empty?(window_algs) and length(new_window_queue) >= min_points_for_window do
-      process_window(state_after_linear, window_algs)
-    else
-      state_after_linear
+    min_points_for_window =
+      case window_algs do
+        [] -> 0
+        _ -> state.window
+      end
+
+    case window_algs do
+      [] ->
+        state_after_linear
+
+      _ ->
+        if length(new_window_queue) >= min_points_for_window do
+          process_window(state_after_linear, window_algs)
+        else
+          state_after_linear
+        end
     end
   end
 
@@ -100,30 +111,45 @@ defmodule Interpolation.Calculate do
     current_window = state.window_queue
 
     window_changed =
-      state.last_window_processed == [] or current_window != state.last_window_processed
+      state.last_window_processed == [] or
+        current_window != state.last_window_processed
 
     if window_changed do
-      sorted_window = Enum.sort_by(current_window, &elem(&1, 0))
-      {first_x, _} = List.first(sorted_window)
-      {last_x, _} = List.last(sorted_window)
-
-      if state.is_first_window do
-        Enum.each(sorted_window, fn {x, y} ->
-          Enum.each(window_algs, fn alg ->
-            send(state.printer, {:result, alg, x, y})
-          end)
-        end)
-
-        calc_window_many_points(state, sorted_window, first_x, last_x, window_algs)
-        %{state | is_first_window: false, last_window_processed: current_window}
-      else
-        center_x = (first_x + last_x) / 2
-        calc_window_single_point(state, sorted_window, center_x, window_algs)
-        %{state | last_window_processed: current_window}
-      end
+      do_process_window(state, current_window, window_algs)
     else
       state
     end
+  end
+
+  defp do_process_window(state, current_window, window_algs) do
+    sorted_window = Enum.sort_by(current_window, &elem(&1, 0))
+    {first_x, _} = List.first(sorted_window)
+    {last_x, _} = List.last(sorted_window)
+
+    if state.is_first_window do
+      process_first_window(state, sorted_window, first_x, last_x, window_algs)
+    else
+      process_next_window(state, sorted_window, first_x, last_x, window_algs)
+    end
+  end
+
+  defp process_first_window(state, sorted_window, first_x, last_x, window_algs) do
+    Enum.each(sorted_window, fn {x, y} ->
+      Enum.each(window_algs, fn alg ->
+        send(state.printer, {:result, alg, x, y})
+      end)
+    end)
+
+    calc_window_many_points(state, sorted_window, first_x, last_x, window_algs)
+
+    %{state | is_first_window: false, last_window_processed: sorted_window}
+  end
+
+  defp process_next_window(state, sorted_window, first_x, last_x, window_algs) do
+    center_x = (first_x + last_x) / 2
+    calc_window_single_point(state, sorted_window, center_x, window_algs)
+
+    %{state | last_window_processed: sorted_window}
   end
 
   defp calc_window_many_points(state, window_points, start_x, end_x, algorithms) do

@@ -18,31 +18,41 @@ defmodule Interpolation.Algorithms do
     n = length(points) - 1
 
     table =
-      Enum.reduce(0..n, [], fn i, acc ->
+      0..n
+      |> Enum.map(fn i ->
         {_, y} = Enum.at(points, i)
-        acc ++ [[y]]
+        [y]
       end)
 
     table =
-      Enum.reduce(1..n, table, fn k, table_acc ->
-        Enum.reduce(0..(n - k), table_acc, fn i, table_acc2 ->
-          {xi, _} = Enum.at(points, i)
-          {xik, _} = Enum.at(points, i + k)
-
-          prev_i = Enum.at(Enum.at(table_acc2, i), k - 1)
-          prev_j = Enum.at(Enum.at(table_acc2, i + 1), k - 1)
-
-          diff = (prev_j - prev_i) / (xik - xi)
-
-          row = Enum.at(table_acc2, i)
-          List.update_at(table_acc2, i, fn _ -> row ++ [diff] end)
-        end)
+      1..n
+      |> Enum.reduce(table, fn k, acc ->
+        build_column(acc, points, k, n)
       end)
 
-    result = Enum.at(Enum.at(table, 0), 0)
+    evaluate_newton(x, points, table, n)
+  end
+
+  defp build_column(table, points, k, n) do
+    Enum.reduce(0..(n - k), table, fn i, acc ->
+      {xi, _} = Enum.at(points, i)
+      {xik, _} = Enum.at(points, i + k)
+
+      prev_i = Enum.at(Enum.at(acc, i), k - 1)
+      prev_j = Enum.at(Enum.at(acc, i + 1), k - 1)
+
+      diff = (prev_j - prev_i) / (xik - xi)
+
+      row = Enum.at(acc, i)
+      List.update_at(acc, i, fn _ -> row ++ [diff] end)
+    end)
+  end
+
+  defp evaluate_newton(x, points, table, n) do
+    base = Enum.at(Enum.at(table, 0), 0)
 
     {result, _} =
-      Enum.reduce(1..n, {result, 1.0}, fn i, {res_acc, prod_acc} ->
+      Enum.reduce(1..n, {base, 1.0}, fn i, {res_acc, prod_acc} ->
         {xi, _} = Enum.at(points, i - 1)
         product = prod_acc * (x - xi)
         diff = Enum.at(Enum.at(table, 0), i)
