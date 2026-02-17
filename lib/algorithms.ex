@@ -1,66 +1,70 @@
 defmodule Interpolation.Algorithms do
   @moduledoc """
-  Linear and Newton algorithms implementation
+  Contains pure interpolation algorithms:
+  - linear interpolation
+  - Newton interpolation
+  - finite differences table
   """
-  def linear(points, x) do
-    points
-    |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.find_value(fn [{x1, y1}, {x2, y2}] ->
-      if x >= x1 and x <= x2 do
-        t = (x - x1) / (x2 - x1)
-        y1 + t * (y2 - y1)
-      end
-    end)
+  def linear(x, points) do
+    sorted = Enum.sort_by(points, fn {px, _} -> abs(px - x) end)
+
+    [{x1, y1}, {x2, y2}] = Enum.take(sorted, 2)
+
+    y = y1 + (y2 - y1) * (x - x1) / (x2 - x1)
+    y
   end
 
-  def newton(points, _x, _window) when length(points) < 2, do: nil
+  def newton(x, points) do
+    n = length(points) - 1
 
-  def newton(points, x, window) do
-    pts =
-      points
-      |> Enum.sort_by(fn {xi, _yi} -> abs(xi - x) end)
-      |> Enum.take(window)
-      |> Enum.sort_by(fn {xi, _yi} -> xi end)
+    table =
+      Enum.reduce(0..n, [], fn i, acc ->
+        {_, y} = Enum.at(points, i)
+        acc ++ [[y]]
+      end)
 
-    xs = Enum.map(pts, &elem(&1, 0))
-    ys = Enum.map(pts, &elem(&1, 1))
+    table =
+      Enum.reduce(1..n, table, fn k, table_acc ->
+        Enum.reduce(0..(n - k), table_acc, fn i, table_acc2 ->
+          {xi, _} = Enum.at(points, i)
+          {xik, _} = Enum.at(points, i + k)
 
-    divided_differences(xs, ys)
-    |> evaluate(xs, x)
+          prev_i = Enum.at(Enum.at(table_acc2, i), k - 1)
+          prev_j = Enum.at(Enum.at(table_acc2, i + 1), k - 1)
+
+          diff = (prev_j - prev_i) / (xik - xi)
+
+          row = Enum.at(table_acc2, i)
+          List.update_at(table_acc2, i, fn _ -> row ++ [diff] end)
+        end)
+      end)
+
+    result = Enum.at(Enum.at(table, 0), 0)
+
+    {result, _} =
+      Enum.reduce(1..n, {result, 1.0}, fn i, {res_acc, prod_acc} ->
+        {xi, _} = Enum.at(points, i - 1)
+        product = prod_acc * (x - xi)
+        diff = Enum.at(Enum.at(table, 0), i)
+        {res_acc + diff * product, product}
+      end)
+
+    result
   end
 
-  defp divided_differences(xs, ys) do
-    n = length(xs)
-    level0 = ys
+  def finite_differences(points) do
+    n = length(points) - 1
+    y_vals = Enum.map(points, fn {_, y} -> y end)
 
-    Enum.reduce(1..(n - 1), [level0], fn level, acc ->
-      prev = List.last(acc)
-
-      curr =
-        0..(n - level - 1)
-        |> Enum.map(fn i ->
-          num = Enum.at(prev, i + 1) - Enum.at(prev, i)
-          den = Enum.at(xs, i + level) - Enum.at(xs, i)
-          num / den
+    Enum.reduce(1..n, [y_vals], fn _, [current | _] = acc ->
+      new_row =
+        Enum.reduce(0..(length(current) - 2), [], fn i, row_acc ->
+          diff = Enum.at(current, i + 1) - Enum.at(current, i)
+          row_acc ++ [diff]
         end)
 
-      acc ++ [curr]
+      [new_row | acc]
     end)
-  end
-
-  defp evaluate(deltas, xs, x) do
-    n = length(xs)
-    base = hd(deltas)
-
-    Enum.reduce(1..(n - 1), hd(base), fn i, acc ->
-      coeff = deltas |> Enum.at(i) |> hd()
-
-      prod =
-        xs
-        |> Enum.take(i)
-        |> Enum.reduce(1.0, fn xk, p -> p * (x - xk) end)
-
-      acc + coeff * prod
-    end)
+    |> Enum.reverse()
   end
 end

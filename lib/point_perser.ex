@@ -1,6 +1,7 @@
 defmodule Interpolation.PointParser do
   @moduledoc """
-  parses string into pairs of points
+  Reads input points from standard input
+  and sends them to the calculation process.
   """
 
   @type point :: {float(), float()}
